@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  CONTAINER_REPO: ghcr.io/dragonflydb/operator
+
 on:
   # push:
   # branches: [ main ]
@@ -15,7 +18,7 @@ jobs:
   build-operator:
     runs-on: ubuntu-latest
     env:
-      IMG: ghcr.io/dragonflydb/operator:${{ github.sha }}
+      IMG: ${CONTAINER_REPO}:${{ github.sha }}
 
     steps:
       - uses: actions/checkout@v3
@@ -49,7 +52,7 @@ jobs:
     needs: build-operator
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     env:
-      IMG: ghcr.io/dragonflydb/operator:${{ github.ref_name }}
+      IMG: ${CONTAINER_REPO}:${{ github.ref_name }}
       VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v3
@@ -73,7 +76,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/dragonflydb/operator:${{ github.ref_name }}
+          tags: ${CONTAINER_REPO}:${{ github.ref_name }}
         env:
           DOCKER_BUILDKIT: 1
           DOCKER_USERNAME: ${{ github.actor }}
@@ -90,5 +93,5 @@ jobs:
           body: |
             Release ${{ github.ref_name }}
 
-            Docker image: ghcr.io/dragonflydb/operator:${{ github.ref_name }}
+            Docker image: ${CONTAINER_REPO}:${{ github.ref_name }}
           draft: true

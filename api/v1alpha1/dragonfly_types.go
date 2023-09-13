@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -71,6 +72,20 @@ type DragonflySpec struct {
 	// +optional
 	// +kubebuilder:validation:Optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// (Optional) Persistence specifies the persistent storage settings for the Dragonfly statefulset
+	// +optional
+	// +kubebuilder:validation:Optional
+	Persistence *Persistence `json:"persistence,omitempty"`
+}
+
+// Persistence defines storage settings
+type Persistence struct {
+	// StorageClass specifies the storage class to be used for the persistent volume
+	StorageClass string `json:"storageClass,omitempty"`
+
+	// Size specifies the size of the storage for the persistent volume
+	Size resource.Quantity `json:"size,omitempty"`
 }
 
 // DragonflyStatus defines the observed state of Dragonfly

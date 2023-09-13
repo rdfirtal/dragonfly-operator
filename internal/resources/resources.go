@@ -23,6 +23,7 @@ import (
 	resourcesv1 "github.com/dragonflydb/dragonfly-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -137,9 +138,17 @@ func GetDragonflyResources(ctx context.Context, df *resourcesv1.Dragonfly) ([]cl
 		},
 	}
 
+	var memoryRequest *resource.Quantity
+
 	// set only if resources are specified
 	if df.Spec.Resources != nil {
 		statefulset.Spec.Template.Spec.Containers[0].Resources = *df.Spec.Resources
+
+		if mem := df.Spec.Resources.Requests.Memory(); mem != nil {
+			memoryRequest = mem
+		} else if mem := df.Spec.Resources.Limits.Memory(); mem != nil {
+			memoryRequest = mem
+		}
 	}
 
 	if df.Spec.Args != nil {
@@ -160,6 +169,44 @@ func GetDragonflyResources(ctx context.Context, df *resourcesv1.Dragonfly) ([]cl
 
 	if df.Spec.ServiceAccountName != "" {
 		statefulset.Spec.Template.Spec.ServiceAccountName = df.Spec.ServiceAccountName
+	}
+
+	if p := df.Spec.Persistence; p != nil {
+		volumeName := "data"
+
+		if memoryRequest != nil {
+			minStorage := int64(float64(memoryRequest.Value()) * 1.5)
+
+			if p.Size.Value() < minStorage {
+				return nil, fmt.Errorf("storage request must be at least 1.5x the memory request (or limit if request is not set)")
+			}
+		}
+
+		statefulset.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: volumeName,
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					StorageClassName: &p.StorageClass,
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceStorage: p.Size,
+						},
+					},
+				},
+			},
+		}
+
+		for i, c := range statefulset.Spec.Template.Spec.Containers {
+			c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
+				Name:      volumeName,
+				MountPath: "/data",
+			})
+
+			statefulset.Spec.Template.Spec.Containers[i] = c
+		}
 	}
 
 	resources = append(resources, &statefulset)
